@@ -6,6 +6,8 @@ WinFlow lets you use two devices like one setup
 ---
 
 # Features:
+<img width="491" height="629" alt="image" src="https://github.com/user-attachments/assets/c3c9404d-8a0f-4671-b73c-5f6af304f5e9" />
+
 ## Cursor transition
 
 Move the mouse between devices naturally, similar to a second monitor.
