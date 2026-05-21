@@ -2,12 +2,7 @@
 
 
 WinFlow lets you use two devices like one setup
-
-You can:
-- move your cursor between devices
-- share clipboard instantly
-- control another device without remote desktop
-  
+ 
 ---
 
 # Features:
