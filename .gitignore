@@ -1,6 +1,5 @@
 # Rust
 /target
-Cargo.lock
 
 # Python
 __pycache__/
@@ -16,6 +15,9 @@ __pycache__/
 # VSCode
 .vscode/
 
+# JetBrains
+.idea/
+
 # Windows
 Thumbs.db
 Desktop.ini
@@ -27,36 +29,45 @@ Desktop.ini
 *.tmp
 *.temp
 
-# Local config
+# Cache
+.cache/
+
+# Python virtual env
+venv/
+.venv/
+
+# Local app data
 config.json
 
 # Installer output
 /installer/Output
 /installer/build
 
-# Python venv
-venv/
-.venv/
-
-# Idea
-.idea/
-
-# Cache
-.cache/
-
 # Generated binaries
 *.exe
 
-# Ignore update temp
+# Update temp
 WinFlowUpdate.exe
 
-#Files
-file_drops.rs
-discovery.rs
-network.rs
-Cargo.toml
-Cargo.lock
-.png
-insaller.iss
-winfrlow
-.ico
+# Ignore screenshots
+screenshots/
+
+# Ignore archives
+*.zip
+*.7z
+*.rar
+
+# Ignore local assets
+eye.png
+eye_off.png
+
+# Ignore installer script
+installer.iss
+
+# Ignore icons
+*.ico
+
+# Ignore private/internal source files
+src/discovery.rs
+src/network.rs
+src/file_drop.rs
