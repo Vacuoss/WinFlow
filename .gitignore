@@ -1,0 +1,62 @@
+# Rust
+/target
+Cargo.lock
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.spec
+
+# PyInstaller
+/build
+/dist
+
+# VSCode
+.vscode/
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Logs
+*.log
+
+# Temp
+*.tmp
+*.temp
+
+# Local config
+config.json
+
+# Installer output
+/installer/Output
+/installer/build
+
+# Python venv
+venv/
+.venv/
+
+# Idea
+.idea/
+
+# Cache
+.cache/
+
+# Generated binaries
+*.exe
+
+# Ignore update temp
+WinFlowUpdate.exe
+
+#Files
+file_drops.rs
+discovery.rs
+network.rs
+Cargo.toml
+Cargo.lock
+.png
+insaller.iss
+winfrlow
+.ico
