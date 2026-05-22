@@ -14,19 +14,15 @@ use std::time::{Duration, Instant};
 use windows::Win32::Foundation::POINT;
 use windows::Win32::UI::Input::KeyboardAndMouse::GetAsyncKeyState;
 use windows::Win32::UI::WindowsAndMessaging::{ClipCursor, GetCursorPos, SetCursorPos};
-
 const VK_CONTROL: i32 = 0x11;
 const VK_SHIFT: i32 = 0x10;
 const VK_MENU: i32 = 0x12;
-
 const VK_LMENU: i32 = 0xA4;
 const VK_RMENU: i32 = 0xA5;
-
 const VK_LEFT: i32 = 0x25;
 const VK_UP: i32 = 0x26;
 const VK_RIGHT: i32 = 0x27;
 const VK_DOWN: i32 = 0x28;
-
 const VK_A: i32 = 0x41;
 const VK_B: i32 = 0x42;
 const VK_C: i32 = 0x43;
@@ -53,11 +49,9 @@ const VK_W: i32 = 0x57;
 const VK_X: i32 = 0x58;
 const VK_Y: i32 = 0x59;
 const VK_Z: i32 = 0x5A;
-
 const HORIZONTAL_EDGE: i32 = 10;
 const TOP_EDGE: i32 = 6;
 const BOTTOM_EDGE: i32 = 14;
-
 const INITIAL_PUSH: i32 = 36;
 const SWITCH_COOLDOWN_MS: u64 = 260;
 
