@@ -2,16 +2,13 @@ use crate::config::Config;
 use crate::cursor_switch::lock_point;
 use crate::network::send_udp_message;
 use crate::protocol::{Message, MouseButton};
-
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
 };
 use std::thread;
 use std::time::{Duration, Instant};
-
 use windows::Win32::Foundation::POINT;
-
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     GetAsyncKeyState,
     VK_LBUTTON,
@@ -138,7 +135,6 @@ fn reset_mouse_state(
 ) {
     *was_remote = false;
     *ignore_next_warp = false;
-
     *last_left = false;
     *last_right = false;
     *last_middle = false;

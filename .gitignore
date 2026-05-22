@@ -68,6 +68,6 @@ installer.iss
 *.ico
 
 # Ignore private/internal source files
-src/discovery.rs
 src/network.rs
-src/file_drop.rs
+update_manager.py
+src/security.rs

@@ -2,24 +2,31 @@ use crate::config::Config;
 use crate::input_capture::screen_size;
 use crate::network::send_udp_message;
 use crate::protocol::Message;
+
 use std::sync::{
     atomic::{AtomicBool, Ordering},
-    Arc,
+    Arc, Mutex,
 };
+
 use std::thread;
 use std::time::{Duration, Instant};
+
 use windows::Win32::Foundation::POINT;
 use windows::Win32::UI::Input::KeyboardAndMouse::GetAsyncKeyState;
-use windows::Win32::UI::WindowsAndMessaging::{GetCursorPos, SetCursorPos};
+use windows::Win32::UI::WindowsAndMessaging::{ClipCursor, GetCursorPos, SetCursorPos};
+
 const VK_CONTROL: i32 = 0x11;
 const VK_SHIFT: i32 = 0x10;
 const VK_MENU: i32 = 0x12;
+
 const VK_LMENU: i32 = 0xA4;
 const VK_RMENU: i32 = 0xA5;
+
 const VK_LEFT: i32 = 0x25;
 const VK_UP: i32 = 0x26;
 const VK_RIGHT: i32 = 0x27;
 const VK_DOWN: i32 = 0x28;
+
 const VK_A: i32 = 0x41;
 const VK_B: i32 = 0x42;
 const VK_C: i32 = 0x43;
@@ -46,88 +53,89 @@ const VK_W: i32 = 0x57;
 const VK_X: i32 = 0x58;
 const VK_Y: i32 = 0x59;
 const VK_Z: i32 = 0x5A;
+
+const HORIZONTAL_EDGE: i32 = 10;
+const TOP_EDGE: i32 = 6;
+const BOTTOM_EDGE: i32 = 14;
+
+const INITIAL_PUSH: i32 = 36;
+const SWITCH_COOLDOWN_MS: u64 = 260;
+
 pub fn start_cursor_switch(
-    cfg: Config,
+    cfg_runtime: Arc<Mutex<Config>>,
     connected: Arc<AtomicBool>,
     remote_mode: Arc<AtomicBool>,
 ) {
     thread::spawn(move || {
-        let mut last_hotkey = Instant::now();
+        let mut last_switch = Instant::now();
 
         loop {
             if !connected.load(Ordering::Relaxed) {
-                thread::sleep(Duration::from_millis(100));
+                release_cursor_clip();
+                thread::sleep(Duration::from_millis(80));
                 continue;
             }
 
-            let mut p = POINT::default();
+            let cfg = match cfg_runtime.lock() {
+                Ok(cfg) => cfg.clone(),
+                Err(_) => {
+                    thread::sleep(Duration::from_millis(50));
+                    continue;
+                }
+            };
+
             let (w, h) = screen_size();
+            let already_remote = remote_mode.load(Ordering::Relaxed);
 
-            unsafe {
-                if GetCursorPos(&mut p).is_ok() {
-                    let already_remote = remote_mode.load(Ordering::Relaxed);
+            if hotkey_pressed(&cfg.hotkey_disconnect)
+                && last_switch.elapsed() > Duration::from_millis(SWITCH_COOLDOWN_MS)
+            {
+                remote_mode.store(false, Ordering::Relaxed);
+                release_cursor_clip();
 
-                    if hotkey_pressed(&cfg.hotkey_disconnect)
-                        && last_hotkey.elapsed() > Duration::from_millis(500)
-                    {
-                        remote_mode.store(false, Ordering::Relaxed);
-                        send_udp_message(&cfg, &Message::ReturnControl);
-                        move_to_safe_point(&cfg, w, h);
+                send_udp_message(&cfg, &Message::ReturnControl);
+                move_to_safe_point(&cfg, w, h);
 
-                        last_hotkey = Instant::now();
-                        thread::sleep(Duration::from_millis(100));
+                last_switch = Instant::now();
+                thread::sleep(Duration::from_millis(70));
+                continue;
+            }
+
+            if hotkey_pressed(&cfg.hotkey_switch)
+                && last_switch.elapsed() > Duration::from_millis(SWITCH_COOLDOWN_MS)
+            {
+                if already_remote {
+                    remote_mode.store(false, Ordering::Relaxed);
+                    release_cursor_clip();
+
+                    send_udp_message(&cfg, &Message::ReturnControl);
+                    move_to_safe_point(&cfg, w, h);
+                } else {
+                    enter_remote_mode(&cfg, &remote_mode, w, h);
+                }
+
+                last_switch = Instant::now();
+                thread::sleep(Duration::from_millis(70));
+                continue;
+            }
+
+            if !already_remote
+                && last_switch.elapsed() > Duration::from_millis(SWITCH_COOLDOWN_MS)
+            {
+                let mut p = POINT::default();
+
+                unsafe {
+                    if GetCursorPos(&mut p).is_ok() && edge_triggered(&cfg, p.x, p.y, w, h) {
+                        enter_remote_mode(&cfg, &remote_mode, w, h);
+
+                        last_switch = Instant::now();
+                        thread::sleep(Duration::from_millis(70));
                         continue;
-                    }
-
-                    let edge_trigger = match cfg.switch_edge.as_str() {
-                        "right" => p.x >= w - 2,
-                        "left" => p.x <= 1,
-                        "top" => p.y <= 1,
-                        "bottom" => p.y >= h - 2,
-                        _ => false,
-                    };
-
-                    if edge_trigger && !already_remote {
-                        remote_mode.store(true, Ordering::Relaxed);
-
-                        send_udp_message(
-                            &cfg,
-                            &Message::EnterControl {
-                                edge: cfg.switch_edge.clone(),
-                            },
-                        );
-
-                        move_to_lock_point(&cfg, w, h);
-                        thread::sleep(Duration::from_millis(250));
-                    }
-
-                    if hotkey_pressed(&cfg.hotkey_switch)
-                        && last_hotkey.elapsed() > Duration::from_millis(500)
-                    {
-                        if already_remote {
-                            remote_mode.store(false, Ordering::Relaxed);
-                            send_udp_message(&cfg, &Message::ReturnControl);
-                            move_to_safe_point(&cfg, w, h);
-                        } else {
-                            remote_mode.store(true, Ordering::Relaxed);
-
-                            send_udp_message(
-                                &cfg,
-                                &Message::EnterControl {
-                                    edge: cfg.switch_edge.clone(),
-                                },
-                            );
-
-                            move_to_lock_point(&cfg, w, h);
-                        }
-
-                        last_hotkey = Instant::now();
-                        thread::sleep(Duration::from_millis(100));
                     }
                 }
             }
 
-            thread::sleep(Duration::from_millis(16));
+            thread::sleep(Duration::from_millis(6));
         }
     });
 }
@@ -136,9 +144,53 @@ pub fn lock_point(cfg: &Config, w: i32, h: i32) -> (i32, i32) {
     match cfg.switch_edge.as_str() {
         "right" => (w - 80, h / 2),
         "left" => (80, h / 2),
-        "top" => (w / 2, 80),
-        "bottom" => (w / 2, h - 80),
+        "top" => (w / 2, 32),
+        "bottom" => (w / 2, h - 32),
         _ => (w / 2, h / 2),
+    }
+}
+
+fn enter_remote_mode(
+    cfg: &Config,
+    remote_mode: &Arc<AtomicBool>,
+    w: i32,
+    h: i32,
+) {
+    remote_mode.store(true, Ordering::Relaxed);
+
+    send_udp_message(
+        cfg,
+        &Message::EnterControl {
+            edge: cfg.switch_edge.clone(),
+        },
+    );
+
+    move_to_lock_point(cfg, w, h);
+
+    send_initial_push(cfg);
+}
+
+fn edge_triggered(cfg: &Config, x: i32, y: i32, w: i32, h: i32) -> bool {
+    match cfg.switch_edge.as_str() {
+        "right" => x >= w - HORIZONTAL_EDGE,
+        "left" => x <= HORIZONTAL_EDGE,
+        "top" => y <= TOP_EDGE,
+        "bottom" => y >= h - BOTTOM_EDGE,
+        _ => false,
+    }
+}
+
+fn send_initial_push(cfg: &Config) {
+    let (dx, dy) = match cfg.switch_edge.as_str() {
+        "right" => (INITIAL_PUSH, 0),
+        "left" => (-INITIAL_PUSH, 0),
+        "top" => (0, -INITIAL_PUSH),
+        "bottom" => (0, INITIAL_PUSH),
+        _ => (0, 0),
+    };
+
+    if dx != 0 || dy != 0 {
+        send_udp_message(cfg, &Message::MouseMove { dx, dy });
     }
 }
 
@@ -154,21 +206,27 @@ fn move_to_safe_point(cfg: &Config, w: i32, h: i32) {
     unsafe {
         match cfg.switch_edge.as_str() {
             "right" => {
-                let _ = SetCursorPos(w - 160, h / 2);
+                let _ = SetCursorPos(w - 220, h / 2);
             }
             "left" => {
-                let _ = SetCursorPos(160, h / 2);
+                let _ = SetCursorPos(220, h / 2);
             }
             "top" => {
-                let _ = SetCursorPos(w / 2, 160);
+                let _ = SetCursorPos(w / 2, 180);
             }
             "bottom" => {
-                let _ = SetCursorPos(w / 2, h - 160);
+                let _ = SetCursorPos(w / 2, h - 180);
             }
             _ => {
                 let _ = SetCursorPos(w / 2, h / 2);
             }
         }
+    }
+}
+
+fn release_cursor_clip() {
+    unsafe {
+        let _ = ClipCursor(None);
     }
 }
 
@@ -266,5 +324,7 @@ fn hotkey_pressed(raw: &str) -> bool {
 }
 
 fn key_down(vk: i32) -> bool {
-    unsafe { (GetAsyncKeyState(vk) as u16 & 0x8000) != 0 }
+    unsafe {
+        (GetAsyncKeyState(vk) as u16 & 0x8000) != 0
+    }
 }

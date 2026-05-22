@@ -1,15 +1,6 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DeviceInfo {
-    pub id: String,
-    pub name: String,
-    pub ip: String,
-    pub tcp_port: u16,
-    pub udp_port: u16,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum MouseButton {
     Left,
     Right,
@@ -17,9 +8,15 @@ pub enum MouseButton {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum Message {
-    Hello(DeviceInfo),
+pub struct RuntimeConfigUpdate {
+    pub switch_edge: String,
+    pub clipboard_enabled: bool,
+    pub hotkey_switch: String,
+    pub hotkey_disconnect: String,
+}
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum Message {
     EnterControl {
         edge: String,
     },
@@ -51,22 +48,15 @@ pub enum Message {
         hash: String,
     },
 
-    DropStart {
-        id: String,
-        name: String,
-        size: u64,
-        sha256: String,
-    },
-
-    DropChunk {
-        id: String,
-        data_b64: String,
-    },
-
-    DropEnd {
-        id: String,
-    },
-
     Ping,
     Pong,
+    Disconnect,
+
+    ConfigUpdate(RuntimeConfigUpdate),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WireMessage {
+    pub token: String,
+    pub message: Message,
 }

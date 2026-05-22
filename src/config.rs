@@ -13,8 +13,6 @@ pub struct Config {
     pub peer_udp_port: u16,
     pub switch_edge: String,
     pub clipboard_enabled: bool,
-    pub drops_enabled: bool,
-    pub drops_folder: String,
     pub hotkey_switch: String,
     pub hotkey_disconnect: String,
     pub autostart_enabled: bool,
@@ -27,20 +25,13 @@ impl Default for Config {
             device_name: hostname_fallback(),
             tcp_port: 45455,
             udp_port: 45456,
-
             peer_ip: "127.0.0.1".to_string(),
             peer_tcp_port: 45455,
             peer_udp_port: 45456,
-
             switch_edge: "right".to_string(),
             clipboard_enabled: true,
-            drops_enabled: true,
-
-            drops_folder: "WinFlow Drops".to_string(),
-
             hotkey_switch: "Ctrl+Alt+Right".to_string(),
             hotkey_disconnect: "Shift+LeftAlt".to_string(),
-
             autostart_enabled: false,
         }
     }

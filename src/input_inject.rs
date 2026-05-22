@@ -50,16 +50,16 @@ pub fn place_cursor_from_edge(edge: String) {
 
         match edge.as_str() {
             "right" => {
-                let _ = SetCursorPos(40, h / 2);
+                let _ = SetCursorPos(120, h / 2);
             }
             "left" => {
-                let _ = SetCursorPos(w - 40, h / 2);
+                let _ = SetCursorPos(w - 120, h / 2);
             }
             "top" => {
-                let _ = SetCursorPos(w / 2, h - 40);
+                let _ = SetCursorPos(w / 2, h - 120);
             }
             "bottom" => {
-                let _ = SetCursorPos(w / 2, 40);
+                let _ = SetCursorPos(w / 2, 120);
             }
             _ => {
                 let _ = SetCursorPos(w / 2, h / 2);

@@ -1,13 +1,12 @@
 mod clipboard;
 mod config;
 mod cursor_switch;
-mod discovery;
-mod file_drop;
 mod input_capture;
 mod input_inject;
+mod mouse_hook;
 mod network;
 mod protocol;
-mod mouse_hook;
+mod security;
 
 use crate::clipboard::{apply_remote_clipboard, start_clipboard_sync};
 use crate::config::{load_config, save_config};
@@ -20,13 +19,10 @@ use crate::input_inject::{
 };
 use crate::network::{send_tcp_message, start_tcp_server, start_udp_server};
 use crate::protocol::Message;
-use std::collections::HashMap;
-use std::path::PathBuf;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Mutex,
 };
-
 use tokio::sync::mpsc;
 use tokio::time::{sleep, Duration};
 
@@ -49,11 +45,10 @@ async fn main() {
     println!("Device: {}", cfg.device_name);
     println!("Peer: {}", cfg.peer_ip);
 
+    let cfg_runtime = Arc::new(Mutex::new(cfg.clone()));
     let connected = Arc::new(AtomicBool::new(false));
     let remote_mode = Arc::new(AtomicBool::new(false));
     let last_remote_clipboard_hash = Arc::new(Mutex::new(String::new()));
-    let active_drops: Arc<Mutex<HashMap<String, PathBuf>>> =
-        Arc::new(Mutex::new(HashMap::new()));
 
     let (incoming_tx, mut incoming_rx) = mpsc::channel::<Message>(1024);
 
@@ -64,16 +59,20 @@ async fn main() {
         incoming_tx.clone(),
     ));
 
-    discovery::start_discovery(cfg.clone());
-
-    start_cursor_switch(cfg.clone(), connected.clone(), remote_mode.clone());
-    mouse_hook::start_mouse_hook(
-    cfg.clone(),
-    connected.clone(),
-    remote_mode.clone(),
+    start_cursor_switch(
+        cfg_runtime.clone(),
+        connected.clone(),
+        remote_mode.clone(),
     );
+
+    mouse_hook::start_mouse_hook(
+        cfg_runtime.clone(),
+        connected.clone(),
+        remote_mode.clone(),
+    );
+
     start_clipboard_sync(
-        cfg.clone(),
+        cfg_runtime.clone(),
         connected.clone(),
         last_remote_clipboard_hash.clone(),
     );
@@ -90,24 +89,43 @@ async fn main() {
                 println!("WINFLOW_DISCONNECTED");
             }
 
-            sleep(Duration::from_secs(1)).await;
+            sleep(Duration::from_millis(500)).await;
         }
     });
 
     while let Some(msg) = incoming_rx.recv().await {
         match msg {
             Message::EnterControl { edge } => {
-                    remote_mode.store(false, Ordering::Relaxed);
-                    place_cursor_from_edge(edge);
-                    println!("WINFLOW_CURSOR_RECEIVED");
+                remote_mode.store(false, Ordering::Relaxed);
+                place_cursor_from_edge(edge);
+                println!("WINFLOW_CURSOR_RECEIVED");
             }
 
             Message::ExitControl => {
                 remote_mode.store(false, Ordering::Relaxed);
             }
+
             Message::ReturnControl => {
                 remote_mode.store(false, Ordering::Relaxed);
                 println!("WINFLOW_CURSOR_RETURNED");
+            }
+
+            Message::Disconnect => {
+                connected.store(false, Ordering::Relaxed);
+                remote_mode.store(false, Ordering::Relaxed);
+                println!("WINFLOW_DISCONNECTED");
+            }
+
+            Message::ConfigUpdate(update) => {
+                if let Ok(mut runtime_cfg) = cfg_runtime.lock() {
+                    runtime_cfg.switch_edge = update.switch_edge;
+                    runtime_cfg.clipboard_enabled = update.clipboard_enabled;
+                    runtime_cfg.hotkey_switch = update.hotkey_switch;
+                    runtime_cfg.hotkey_disconnect = update.hotkey_disconnect;
+                    save_config(&runtime_cfg);
+                }
+
+                println!("WINFLOW_CONFIG_UPDATED");
             }
 
             Message::OpenUrl { url } => {
@@ -123,6 +141,7 @@ async fn main() {
             Message::MouseButton { button, down } => {
                 inject_mouse_button(button, down);
             }
+
             Message::MouseWheel { delta } => {
                 inject_mouse_wheel(delta);
             }
@@ -135,28 +154,6 @@ async fn main() {
                 );
             }
 
-            Message::DropStart { id, name, .. } => {
-                let path = file_drop::receive_drop_start(name);
-
-                if let Ok(mut drops) = active_drops.lock() {
-                    drops.insert(id, path);
-                }
-            }
-
-            Message::DropChunk { id, data_b64 } => {
-                if let Ok(drops) = active_drops.lock() {
-                    if let Some(path) = drops.get(&id) {
-                        file_drop::append_drop_chunk(path, data_b64);
-                    }
-                }
-            }
-
-            Message::DropEnd { id } => {
-                if let Ok(mut drops) = active_drops.lock() {
-                    drops.remove(&id);
-                }
-            }
-
             Message::Ping => {
                 connected.store(true, Ordering::Relaxed);
                 send_tcp_message(&cfg, &Message::Pong).await;
@@ -165,10 +162,6 @@ async fn main() {
             Message::Pong => {
                 connected.store(true, Ordering::Relaxed);
                 println!("WINFLOW_CONNECTED");
-            }
-
-            Message::Hello(device) => {
-                println!("Discovered device: {}", device.name);
             }
         }
     }

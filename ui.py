@@ -217,6 +217,7 @@ class HotkeyField(ctk.CTkFrame):
     def capture_key(self, event):
         if not self.capture:
             return "break"
+
         key = VK_NAMES.get(event.keycode)
 
         if not key:
@@ -261,6 +262,7 @@ class HotkeyField(ctk.CTkFrame):
 
         return result
 
+
 class SecretField(ctk.CTkFrame):
     def __init__(
         self,
@@ -282,6 +284,7 @@ class SecretField(ctk.CTkFrame):
         self.eye_open = eye_open
         self.eye_closed = eye_closed
         self.visible = not hidden
+
         self.label = ctk.CTkLabel(
             self,
             text=title,
@@ -290,8 +293,10 @@ class SecretField(ctk.CTkFrame):
             anchor="w"
         )
         self.label.pack(fill="x", pady=(5, 2))
+
         self.row = ctk.CTkFrame(self, fg_color="transparent")
         self.row.pack(fill="x")
+
         self.entry = ctk.CTkEntry(
             self.row,
             textvariable=self.variable,
@@ -372,6 +377,7 @@ class WinFlowUI:
         self.autostart_enabled = ctk.BooleanVar(value=self.cfg.get("autostart_enabled", False))
         self.status = ctk.StringVar(value="Disconnected")
         self.agent_log = ctk.StringVar(value="Agent is not running")
+
         self.eye_open_img = ctk.CTkImage(
             light_image=Image.open(resource_path("eye.png")),
             dark_image=Image.open(resource_path("eye.png")),
@@ -389,14 +395,11 @@ class WinFlowUI:
 
     def build(self):
         self.root.configure(fg_color=BG)
-
         container = ctk.CTkFrame(self.root, corner_radius=20, fg_color=CARD)
         container.pack(padx=16, pady=16, fill="both", expand=True)
-
         header = ctk.CTkFrame(container, fg_color="transparent", height=42)
         header.pack(padx=18, pady=(12, 2), fill="x")
         header.pack_propagate(False)
-
         spacer_left = ctk.CTkFrame(header, fg_color="transparent", width=44)
         spacer_left.pack(side="left")
 
@@ -528,11 +531,16 @@ class WinFlowUI:
             width=124,
             height=31,
             corner_radius=9,
-            fg_color=MAIN,
+            fg_color=INPUT_BG,
             button_color=MAIN_DARK,
             button_hover_color=MAIN_LIGHT,
+            dropdown_fg_color=INPUT_BG,
+            dropdown_hover_color=MAIN_DARK,
+            dropdown_text_color="white",
+            text_color="white",
             font=("Segoe UI", 11),
-            command=lambda _: self.save_silent()
+            dropdown_font=("Segoe UI", 11),
+            command=lambda _: self.on_switch_edge_changed()
         )
         self.edge_menu.pack(side="left", padx=(7, 0))
 
@@ -547,7 +555,7 @@ class WinFlowUI:
             hover_color=GREEN_DARK,
             checkmark_color="white",
             font=("Segoe UI", 11),
-            command=self.save_silent
+            command=self.on_runtime_setting_changed
         )
         self.clipboard_check.pack(side="left")
 
@@ -686,9 +694,42 @@ class WinFlowUI:
         self.cfg["autostart_enabled"] = self.autostart_enabled.get()
         save_config(self.cfg)
 
+    def build_runtime_config_update(self):
+        return {
+            "ConfigUpdate": {
+                "switch_edge": self.edge.get(),
+                "clipboard_enabled": self.clipboard.get(),
+                "hotkey_switch": self.hotkey_switch.get().strip() or "Ctrl+Alt+Right",
+                "hotkey_disconnect": self.hotkey_disconnect.get().strip() or "Shift+LeftAlt"
+            }
+        }
+
+    def notify_core_config_update(self):
+        if self.process is None or self.process.poll() is not None:
+            return
+
+        try:
+            sock = socket.create_connection(
+                ("127.0.0.1", int(self.cfg.get("tcp_port", 45455))),
+                timeout=0.3
+            )
+            sock.sendall((json.dumps(self.build_runtime_config_update()) + "\n").encode("utf-8"))
+            sock.close()
+        except Exception:
+            pass
+
+    def on_switch_edge_changed(self):
+        self.save_silent()
+        self.notify_core_config_update()
+
+    def on_runtime_setting_changed(self):
+        self.save_silent()
+        self.notify_core_config_update()
+
     def save_settings(self):
         self.save_silent()
         set_windows_autostart(self.autostart_enabled.get())
+        self.notify_core_config_update()
         self.agent_log.set("Settings saved")
 
     def toggle_connection(self):

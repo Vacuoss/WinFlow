@@ -9,14 +9,12 @@ use std::sync::{
 };
 use std::thread;
 use std::time::Duration;
+
 pub fn start_clipboard_sync(
-    cfg: Config,
+    cfg_runtime: Arc<Mutex<Config>>,
     connected: Arc<AtomicBool>,
     last_remote_hash: Arc<Mutex<String>>,
 ) {
-    if !cfg.clipboard_enabled {
-        return;
-    }
     let rt_handle = tokio::runtime::Handle::current();
 
     thread::spawn(move || {
@@ -36,6 +34,19 @@ pub fn start_clipboard_sync(
                 continue;
             }
 
+            let cfg = match cfg_runtime.lock() {
+                Ok(cfg) => cfg.clone(),
+                Err(_) => {
+                    thread::sleep(Duration::from_millis(200));
+                    continue;
+                }
+            };
+
+            if !cfg.clipboard_enabled {
+                thread::sleep(Duration::from_millis(200));
+                continue;
+            }
+
             if let Ok(text) = clipboard.get_text() {
                 let hash = hash_text(&text);
                 let remote_hash = match last_remote_hash.lock() {
@@ -48,6 +59,7 @@ pub fn start_clipboard_sync(
 
                     let cfg_clone = cfg.clone();
                     let msg = Message::ClipboardText { text, hash };
+
                     rt_handle.spawn(async move {
                         send_tcp_message(&cfg_clone, &msg).await;
                     });
@@ -58,6 +70,7 @@ pub fn start_clipboard_sync(
         }
     });
 }
+
 pub fn apply_remote_clipboard(
     text: String,
     hash: String,
@@ -77,6 +90,7 @@ pub fn apply_remote_clipboard(
         Err(e) => eprintln!("[clipboard] Failed to open clipboard: {e}"),
     }
 }
+
 fn hash_text(text: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(text.as_bytes());
